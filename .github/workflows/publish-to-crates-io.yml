@@ -2,22 +2,36 @@
 # whenever a tag is created. This basically boils down to running
 # `scripts/publish.rs` at the right time.
 
-name: "Publish to crates.io"
-
 on:
   push:
     tags:
-    - 'v*'
+      - "v*"
+
+env:
+  RUST_VERSION: 1.86
 
 jobs:
   publish:
-    if: github.repository == 'bytecodealliance/wac'
+    name: Publish to crates.io
     runs-on: ubuntu-latest
+    permissions:
+      id-token: write # required for OIDC token exchange (crates-io-auth-action)
+    if: github.repository_owner == 'bytecodealliance/wac'
     steps:
-    - uses: actions/checkout@v3
-    - run: rustup update stable && rustup default stable
-    - run: |
-        rustc ci/publish.rs
-        ./publish publish
-      env:
-        CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        shell: bash
+        run: |
+          rustup toolchain install ${{ env.RUST_VERSION }}
+          rustup default ${{ env.RUST_VERSION }}
+
+      - uses: rust-lang/crates-io-auth-action@v1.0.1
+        id: auth
+
+      - name: Publish wac crates to crates.io
+        run: |
+          rustc ci/publish.rs
+          ./publish publish
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ steps.auth.outputs.token }}
