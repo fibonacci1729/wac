@@ -1,8 +1,10 @@
 use crate::ModuleType;
 use id_arena::{Arena, Id};
 use indexmap::{IndexMap, IndexSet};
+use semver::Version;
 use std::{
     fmt,
+    hash::{Hash, Hasher},
     ops::{Index, IndexMut},
 };
 
@@ -916,7 +918,7 @@ pub struct Interface {
     ///
     /// This may be `None` for inline interfaces.
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "Option::is_none"))]
-    pub id: Option<String>,
+    pub id: Option<ExternName>,
     /// A map of exported name to information about the used type.
     #[cfg_attr(feature = "serde", serde(skip_serializing_if = "IndexMap::is_empty"))]
     pub uses: IndexMap<String, UsedType>,
@@ -1021,5 +1023,128 @@ impl fmt::Display for ExternKind {
             Self::Import => write!(f, "import"),
             Self::Export => write!(f, "export"),
         }
+    }
+}
+
+/// Represents the name of an extern item.
+#[derive(Clone, Debug)]
+pub struct ExternName(pub String);
+
+impl PartialEq for ExternName {
+    fn eq(&self, other: &Self) -> bool {
+        self.canonical() == other.canonical()
+    }
+}
+
+impl fmt::Display for ExternName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl std::ops::Deref for ExternName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl Eq for ExternName {}
+
+impl Hash for ExternName {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.canonical().hash(state);
+    }
+}
+
+impl From<&String> for ExternName {
+    fn from(s: &String) -> Self {
+        Self(s.clone())
+    }
+}
+
+impl From<String> for ExternName {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl From<&str> for ExternName {
+    fn from(s: &str) -> Self {
+        Self(s.to_string())
+    }
+}
+
+impl AsRef<str> for ExternName {
+    fn as_ref(&self) -> &str {
+        self.exact()
+    }
+}
+
+impl ExternName {
+    fn canonical(&self) -> String {
+        match Self::semver_track_string(&self.0) {
+            Some(track) => track,
+            None => self.0.to_string(),
+        }
+    }
+
+    fn exact(&self) -> &str {
+        &self.0
+    }
+
+    fn version(&self) -> Option<Version> {
+        let mut parts = self.0.split('@');
+        let _pkg_interface = parts.next()?;
+        let version = parts.next()?;
+        assert!(parts.next().is_none());
+        Version::parse(version).ok()
+    }
+    
+    fn semver_track(version: &Version) -> Version {
+        let mut version = version.clone();
+        version.build = semver::BuildMetadata::EMPTY;
+        if !version.pre.is_empty() {
+            return version;
+        }
+        if version.major != 0 {
+            version.minor = 0;
+            version.patch = 0;
+            return version;
+        }
+        if version.minor != 0 {
+            version.patch = 0;
+            return version;
+        }
+        version
+    }
+    
+    fn semver_track_string(s: &str) -> Option<String> {
+        let mut parts = s.split('@');
+        let pkg_interface = parts.next()?;
+        let version = parts.next()?;
+        assert!(parts.next().is_none());
+
+        let mut pi_parts = pkg_interface.split('/');
+        let package = pi_parts.next()?.to_string();
+        let interface = pi_parts.next()?.to_string();
+        assert!(pi_parts.next().is_none());
+        
+        let version = Version::parse(version).ok()?;
+        let version = Self::semver_track(&version);
+        
+        let track = format!("{package}/{interface}");
+        
+        if !version.pre.is_empty() {
+            return Some(format!("{track}@{}", version));
+        }
+        if version.major != 0 {
+            return Some(format!("{track}@{}", version.major));
+        }
+        if version.minor != 0 {
+            return Some(format!("{track}@{}.{}", version.major, version.minor));
+        }
+        Some(format!("{track}@{}", version))
     }
 }

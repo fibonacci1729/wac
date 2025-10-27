@@ -1,7 +1,7 @@
 use crate::{
     CoreExtern, CoreFuncType, DefinedType, Enum, Flags, FuncType, FuncTypeId, Interface,
     InterfaceId, ItemKind, ModuleType, ModuleTypeId, Record, Resource, ResourceAlias, ResourceId,
-    Type, Types, UsedType, ValueType, Variant, World, WorldId,
+    Type, Types, UsedType, ValueType, Variant, World, WorldId, ExternName,
 };
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
@@ -518,7 +518,7 @@ impl<'a> TypeConverter<'a> {
         let wasm_types = self.wasm_types.clone();
         let instance_ty = &wasm_types[id];
         let id = self.types.add_interface(Interface {
-            id: name.and_then(|n| n.contains(':').then(|| n.to_owned())),
+            id: name.map(Into::into),
             uses: Default::default(),
             exports: IndexMap::with_capacity(instance_ty.exports.len()),
         });

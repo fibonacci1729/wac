@@ -1,7 +1,7 @@
 use crate::{
     DefinedType, DefinedTypeId, FuncType, FuncTypeId, Interface, InterfaceId, ItemKind,
     ModuleTypeId, Record, Resource, ResourceAlias, ResourceId, SubtypeChecker, Type, Types,
-    UsedType, ValueType, Variant, World, WorldId,
+    UsedType, ValueType, Variant, World, WorldId, ExternName,
 };
 use anyhow::{bail, Context, Result};
 use indexmap::IndexMap;
@@ -27,7 +27,7 @@ pub struct TypeAggregator {
     /// A map from foreign type to remapped local type.
     remapped: HashMap<Type, Type>,
     /// A map of interface names to remapped interface id.
-    interfaces: HashMap<String, InterfaceId>,
+    interfaces: HashMap<ExternName, InterfaceId>,
 }
 
 impl TypeAggregator {
